@@ -2,13 +2,16 @@
 
 这是一个使用 D3.js(v5) 来实现的一个杭州地图项目，我会尝试一步一步由简单到复杂搭建一个功能完善的地图项目，并且会写博客文章记录。博客地址：[https://wufeihuang.github.io](https://wufeihuang.github.io/)
 
+起始日期： 2019/04/06
+地点：杭州
+
 ## 数据来源
 使用的是[来自DataV的杭州地理数据](https://datav.aliyun.com/tools/atlas/#&lat=29.88057058351226&lng=119.53345999999999&zoom=9)。
 
 ## 目前计划（待补充）
 
-- [x] 1. 初始轮廓地图 [link](./map_01/index.html)
-- [x] 2. 使用TopoJSON优化轮廓，添加悬浮突出和城区名提示 [link](./map_02/index.html)
+- [x] 1. 初始轮廓地图 [blog](https://wufeihuang.github.io/2019/04/06/building-a-map-of-hangzhou-with-d3js/)
+- [x] 2. 使用TopoJSON优化轮廓，添加悬浮突出和城区名提示 [blog](https://wufeihuang.github.io/2019/04/07/using-topojson-to-optimize-the-map/)
 - [ ] 3. 在城区地理中心标记城区名称
 - [ ] 4. Zoom & Drag （缩放、平移）
 - [ ] 5. ...
