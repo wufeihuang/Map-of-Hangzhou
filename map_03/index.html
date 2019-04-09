@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <title>Map with TopoJSON</title>
+  <style>
+    svg {
+      border: 1px solid #ccc;
+    }
+
+    .area_overlay:hover {
+      fill: orange;
+      stroke: yellow;
+      opacity: 1;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="chart"></div>
+
+  <script src="https://d3js.org/d3.v5.min.js"></script>
+  <script src="https://unpkg.com/topojson@3"></script>
+  <script>
+    const width = 960
+    const height = 600
+    const margin = {
+      top: 10,
+      right: 10,
+      bottom: 10,
+      left: 10
+    }
+
+    const geo_hangzhou_url = '../data/hangzhou.geo.json'
+
+    const box = d3.select('#chart')
+    const svg = box.append('svg')
+      .attr('width', width)
+      .attr('height', height)
+
+    const g = svg.append('g')
+      .attr('transform', `translate(${margin.top}, ${margin.left})`)
+
+    // 将函数声明为 async，内部会用到 await
+    async function draw() {
+      /*******      1、获得数据          *******/
+
+      // 获取杭州的GeoJSON，然后转换出 TopoJSON 数据，并进行错误捕获
+      let topo_data
+      let geo_data
+      try {
+        // 获取到 GeoJSON 数据
+        geo_data = await d3.json(geo_hangzhou_url)
+        // 将 GeoJSON 数据转成 TopoJSON 格式
+        topo_data = topojson.topology({
+          geo: geo_data
+        }, 1e6)
+      } catch (e) {
+        return console.error(e)
+      }
+
+      console.log('topo_data', topo_data)
+      console.log('geo_data', geo_data)
+
+      // 如果只得到 TopoJSON 格式数据，可以使用 topojson.feature 来转换得到 GeoJSON
+      // const geo_data2 = topojson.feature(topo_data, topo_data.objects.geo)
+      // console.log('geo_data2', geo_data2) // 和 geo_data 一样
+      // console.log('geo_data === geo_data2', geo_data === geo_data2) // false
+
+      // 获取最外层轮廓路径的 GeoJSON
+      const geo_border = topojson.merge(topo_data, topo_data.objects.geo.geometries)
+      console.log('geo_border', geo_border)
+
+      // 获取不包含最外层轮廓的其余边界路径的 GeoJSON，得到
+      // 的是一个单一的路径，不存在边界重叠问题
+      const geo_interiors = topojson.mesh(topo_data, topo_data.objects.geo, (a, b) => a !== b)
+      console.log('geo_interiors', geo_interiors)
+
+      /*******      2、创建和配置路径生成器函数       *******/
+
+      // 使用墨卡托投影 projection
+      const projection = d3.geoMercator()
+        .fitSize([width, height], geo_data)
+
+      // 地理路径生成器
+      const path = d3.geoPath()
+        .projection(projection)
+
+      /*******      3、结合前二者绘制图形        *******/
+
+      // 开始绘制
+
+      // 先确定好层级，绘制顺序决定 SVG 元素的层级
+      // 第一层（最底层），各区域面积，这一层仅仅渲染区域颜色，不包含边框
+      const areas_layer = g.append('g').attr('class', 'layer--areas')
+      // 第二层，内部边界线路径
+      const interiors_layer = g.append('g').attr('class', 'layer--interior')
+      // 第三层，最外层轮廓路径
+      const outline_layer = g.append('g').attr('class', 'layer--outline')
+      // 第四层，遮罩层 & 交互层，包含完整地图，但默认隐藏；因为
+      // 完全绘制会有内部边界重叠问题，所以仅用于交互时突出显示某个区域
+      const area_overlays_layer = g.append('g').attr('class', 'layer--area_overlays')
+
+      // 第五层，各区域中心点
+      const centers_layer = g.append('g').attr('class', 'layer--psoints')
+
+      // 绘制第一层面积层
+      areas_layer
+        .selectAll('path')
+        .data(geo_data.features)
+        .enter()
+        .append('path')
+        .attr('class', 'area')
+        .attr('d', path)
+        .attr('stroke', 'none')
+        .attr('fill', 'skyblue')
+
+      // 绘制第四层交互层，因为容器层级顺序已定，所以这段代码顺序不影响
+      area_overlays_layer
+        .selectAll('path')
+        .data(geo_data.features)
+        .enter()
+        .append('path')
+        .attr('class', 'area_overlay')
+        .attr('d', path)
+        .attr('stroke', 'none')
+        .attr('fill', 'skyblue')
+        .attr('opacity', 0)
+        // 提示文字
+        .append('title')
+        // 数据中每个几何对象都包含 properties 属性
+        .text(d => d.properties.name)
+
+      // 绘制第二层内部边界线
+      interiors_layer
+        .append('path')
+        .datum(geo_interiors)
+        .attr('d', path)
+        .attr('fill', 'none')
+        .attr('stroke', '#333')
+        .attr('stroke-dasharray', '2 3')
+
+      // 绘制第三层最外圈轮廓线
+      outline_layer
+        .append('path')
+        .datum(geo_border)
+        .attr('d', path)
+        .attr('fill', 'none')
+        .attr('stroke', 'red')
+
+      // 尝试 topojson.neighbors() 的使用；这个函数会返回各个区域（这里是feature）的相邻区域
+      // const geo_neighbors = topojson.neighbors(topo_data.objects.geo.geometries)
+      // console.log('geo_neighbors', geo_neighbors)
+
+      // const test_layer = g.append('g').attr('class', 'layer--test')
+      // test_layer
+      //   .selectAll('path')
+      //   .data(geo_neighbors[0].map(i => geo_data.features[i]))
+      //   .enter()
+      //   .append('path')
+      //   .attr('d', path)
+      //   .attr('fill', 'yellow')
+      //   .append('title')
+      //   .text(d => d.properties.name)
+
+      // 绘制第五层的各区域中心点以及标注名字
+      centers_layer
+        .style('pointer-events', 'none') // 这一层避免事件监听，免得影响交互层的交互
+        .selectAll('.center_group')
+        .data(geo_data.features)
+        .enter()
+        .append('g')
+        .attr('class', 'center_group')
+        .each(function (d) { // 内部有this引用，不能用箭头函数
+          const el = d3.select(this)
+          // d.properties中包含该区域的中心点和名字
+          // 通过projection将地理坐标转换成绘图的平面坐标
+          const [x, y] = projection(d.properties.center)
+          
+          // 绘制圆点
+          el
+            .append('circle')
+            .attr('cx', x)
+            .attr('cy', y)
+            .attr('r', 2)
+            .attr('stroke', 'none')
+            .attr('fill', '#000')
+
+          // 添加地名文字
+          el
+            .append('text')
+            .attr('x', x + 5)
+            .attr('y', y)
+            .attr('dy', '0.35em')
+            .text(d.properties.name)
+        })
+    }
+
+    draw()
+  </script>
+</body>
+
+</html>
